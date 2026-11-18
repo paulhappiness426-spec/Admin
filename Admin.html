@@ -2,140 +2,83 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Candy Match - Admin</title>
+<title>Candy Match Admin</title>
 <style>
-*{box-sizing:border-box}
-body{font-family:Arial,sans-serif;margin:0;padding:16px;background:#f5f0f7;color:#1e0a3a}
-h2{text-align:center;color:#ff006e;margin:8px 0 4px}
-p.sub{text-align:center;color:#888;font-size:13px;margin:0 0 16px}
-.top{display:flex;gap:8px;max-width:800px;margin:0 auto 14px;flex-wrap:wrap}
-.top button{flex:1;padding:12px;border:none;border-radius:99px;font-weight:900;cursor:pointer;background:#fff;box-shadow:0 4px 10px rgba(0,0,0,.1)}
-.top button.on{background:#ff006e;color:#fff}
-.top button:nth-child(1).on{background:#ffb300;color:#000}
-.top button:nth-child(3).on{background:#00c853;color:#fff}
-.top button:nth-child(4).on{background:#ff1744;color:#fff}
-input.search{width:100%;max-width:800px;display:block;margin:0 auto 14px;padding:12px;border-radius:14px;border:2px solid #ff9ecb;background:#fff;font-size:14px}
-#list{max-width:800px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
-.card{background:#fff;border-radius:18px;padding:14px;box-shadow:0 8px 20px rgba(0,0,0,.12);border-left:6px solid #ffb300}
-.card.paid{border-left-color:#00c853}
-.card.rejected{border-left-color:#ff1744}
-.row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:14px;line-height:1.6}
-.row b{color:#1e0a3a}
-.badge{display:inline-block;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:900;background:#fff3cd;color:#8a5a00}
-.badge.paid{background:#d4edda;color:#155724}
-.badge.rejected{background:#f8d7da;color:#721c24}
-.badge.faucetpay{background:#e3f2fd;color:#0d47a1}
-.badge.naira{background:#e8f5e9;color:#1b5e20}
-.btns{display:flex;gap:8px;margin-top:10px}
-.btns button{flex:1;padding:11px;border:none;border-radius:99px;font-weight:900;cursor:pointer;font-size:14px}
-.btn-pay{background:#00c853;color:#fff}
-.btn-rej{background:#ff1744;color:#fff}
-.btn-copy{background:#eee;color:#333}
-.small{font-size:12px;color:#888}
-.empty{text-align:center;color:#888;padding:30px;background:#fff;border-radius:18px}
+body{font-family:Arial;background:#1a0533;color:#fff;padding:15px}
+h2{text-align:center}
+.box{background:#fff;color:#222;border-radius:16px;padding:14px;margin:10px 0}
+button{padding:10px 14px;border:none;border-radius:20px;font-weight:800;cursor:pointer;margin:3px}
+.paid{background:#00c853;color:#fff}
+.reject{background:#ff1744;color:#fff}
+input{padding:10px;border-radius:12px;border:1px solid #ccc;width:90%}
 </style>
 </head>
 <body>
 <h2>🍬 Candy Match Admin</h2>
-<p class="sub">FaucetPay + Naira Only • 1 withdrawal per 24h by Telegram ID</p>
-
-<div class="top">
-<button id="f-all" class="on" onclick="setFilter('all')">All</button>
-<button id="f-pending" onclick="setFilter('pending')">⏳ Pending</button>
-<button id="f-paid" onclick="setFilter('paid')">✅ Paid</button>
-<button id="f-rejected" onclick="setFilter('rejected')">❌ Rejected</button>
+<div style="text-align:center">
+<button onclick="load('pending')" style="background:#ffb300">Pending</button>
+<button onclick="load('paid')" style="background:#00c853;color:#fff">Paid</button>
+<button onclick="load('rejected')" style="background:#ff1744;color:#fff">Rejected</button>
+<button onclick="load('all')" style="background:#fff">All</button>
 </div>
-
-<input class="search" id="search" placeholder="Search by code, username, wallet, account number, email..." oninput="render()">
-
-<div id="list"><div class="empty">Loading...</div></div>
-
+<div id="list"></div>
 <script>
-const SUPABASE_URL = "YOUR_SUPABASE_URL";
-const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
+const SUPABASE_URL="YOUR_SUPABASE_URL";
+const SUPABASE_KEY="YOUR_SUPABASE_ANON_KEY";
+const BOT_TOKEN="YOUR_BOT_TOKEN";
 
-let allData = [];
-let filter = 'all';
-
-async function supabaseRequest(path, method, body){
-  let res = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
-    method: method,
-    headers: {"apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY, "Content-Type": "application/json", "Prefer": "return=representation"},
-    body: body ? JSON.stringify(body) : null
-  });
+async function req(path,method,body){
+  let res=await fetch(SUPABASE_URL+"/rest/v1/"+path,{method:method,headers:{"apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Content-Type":"application/json","Prefer":"return=representation"},body:body?JSON.stringify(body):null});
   return await res.json();
 }
 
-function setFilter(f){
-  filter = f;
-  document.querySelectorAll('.top button').forEach(b=>b.classList.remove('on'));
-  document.getElementById('f-'+f).classList.add('on');
-  render();
+async function notifyUser(telegramId, msg){
+  if(!telegramId || telegramId.startsWith("manual_")) return;
+  try{
+    await fetch("https://api.telegram.org/bot"+BOT_TOKEN+"/sendMessage",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({chat_id: telegramId, text: msg})
+    });
+  }catch(e){}
 }
 
-async function load(){
-  let data = await supabaseRequest("withdrawals?order=created_at.desc&limit=100", "GET");
-  if(!Array.isArray(data)) data = [];
-  allData = data;
-  render();
-}
-
-function copyText(t){
-  navigator.clipboard.writeText(t).then(()=>alert('Copied: '+t));
-}
-
-async function updateStatus(id, status){
-  if(!confirm('Mark as '+status+'?')) return;
-  await supabaseRequest("withdrawals?id=eq."+id, "PATCH", {status: status});
-  load();
-}
-
-function render(){
-  let q = document.getElementById('search').value.toLowerCase();
-  let list = allData.filter(x=>{
-    if(filter !== 'all' && (x.status||'pending') !== filter) return false;
-    if(!q) return true;
-    let hay = ((x.user_code||'')+' '+(x.username||'')+' '+(x.wallet||'')+' '+(x.account_name||'')+' '+(x.bank_name||'')+' '+(x.telegram_id||'')+' '+(x.method||'')).toLowerCase();
-    return hay.includes(q);
-  });
-
-  let el = document.getElementById('list');
-  if(list.length === 0){ el.innerHTML = '<div class="empty">No withdrawals found</div>'; return; }
-
-  el.innerHTML = list.map(x=>{
-    let status = x.status || 'pending';
-    let method = x.method || 'faucetpay';
-    let date = x.created_at ? new Date(x.created_at).toLocaleString() : '';
-    let isFaucet = method === 'faucetpay';
-
-    let detail = '';
-    if(isFaucet){
-      detail = `<div class="row"><span>📧 FaucetPay Email:</span><b>${x.wallet||'-'}</b></div>`;
-    } else {
-      detail = `
-      <div class="row"><span>👤 Account Name:</span><b>${x.account_name||'-'}</b></div>
-      <div class="row"><span>🏦 Bank:</span><b>${x.bank_name||'-'}</b></div>
-      <div class="row"><span>💳 Account Number:</span><b>${x.wallet||'-'}</b></div>`;
-    }
-
-    return `<div class="card ${status}">
-      <div class="row"><span><span class="badge ${method}">${method.toUpperCase()}</span> <span class="badge ${status}">${status.toUpperCase()}</span></span><span class="small">${date}</span></div>
-      <div class="row"><span>🪙 Coins:</span><b>${x.amount_coins}</b></div>
-      <div class="row"><span>💵 USD:</span><b>$${x.amount_usd}</b></div>
-      ${detail}
-      <div class="row"><span>👤 Username:</span><b>${x.username||'-'}</b></div>
-      <div class="row"><span>🔑 User Code:</span><b>${x.user_code||'-'}</b></div>
-      <div class="row"><span>🆔 Telegram ID:</span><b>${x.telegram_id||'-'}</b></div>
-      <div class="btns">
-        <button class="btn-copy" onclick="copyText('${x.wallet||''}')">📋 Copy Wallet / Acct</button>
-        ${status==='pending' ? `<button class="btn-pay" onclick="updateStatus('${x.id}','paid')">✅ Mark Paid</button><button class="btn-rej" onclick="updateStatus('${x.id}','rejected')">❌ Reject</button>` : ''}
-      </div>
+async function load(status){
+  let q="withdrawals?order=created_at.desc&select=*";
+  if(status!=="all") q="withdrawals?status=eq."+status+"&order=created_at.desc&select=*";
+  let data=await req(q,"GET");
+  let html="";
+  if(!data || data.length===0) html="<div class='box'>No withdrawals</div>";
+  data.forEach(w=>{
+    html+=`<div class='box'>
+    <b>${w.username||""}</b> • ${w.user_code||""}<br>
+    🪙 ${w.amount_coins} Coins = $${w.amount_usd}<br>
+    Method: <b>${w.method||""}</b><br>
+    Wallet/Acct: <b>${w.wallet||""}</b><br>
+    Name: ${w.account_name||""} | Bank: ${w.bank_name||""}<br>
+    Status: <b>${w.status}</b> • ${new Date(w.created_at).toLocaleString()}<br>
+    <button class='paid' onclick="markPaid('${w.id}','${w.telegram_id}','${w.amount_coins}','${w.amount_usd}','${w.method}')">✅ Mark Paid</button>
+    <button class='reject' onclick="markReject('${w.id}','${w.telegram_id}')">❌ Reject</button>
     </div>`;
-  }).join('');
+  });
+  document.getElementById("list").innerHTML=html;
 }
 
-load();
-setInterval(load, 20000);
+async function markPaid(id, telegramId, coins, usd, method){
+  await req("withdrawals?id=eq."+id,"PATCH",{status:"paid"});
+  await notifyUser(telegramId, "✅ Withdrawal Paid!\n\n🪙 Coins: "+coins+"\n💵 Amount: $"+usd+"\nMethod: "+method+"\n\nThanks for playing Candy Match! 🍬");
+  alert("Marked Paid + User Notified on Telegram");
+  load('pending');
+}
+
+async function markReject(id, telegramId){
+  await req("withdrawals?id=eq."+id,"PATCH",{status:"rejected"});
+  await notifyUser(telegramId, "❌ Withdrawal Rejected\n\nYour withdrawal was rejected. Please check your wallet details and try again. Contact @candymatchcommunity for help.");
+  alert("Rejected + User Notified");
+  load('pending');
+}
+
+load('pending');
 </script>
 </body>
 </html>
